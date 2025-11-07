@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Circle, Plus, Trash2, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/utils/supabase/client";
 
 type Todo = {
   id: number;
@@ -15,9 +17,46 @@ export default function Home() {
   const [newTodo, setNewTodo] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const router = useRouter();
 
-  const addTodo = (e: React.FormEvent) => {
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsAuthenticated(!!user);
+    };
+    checkAuth();
+
+    // 监听认证状态变化
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session?.user);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 检查用户是否登录
+    if (isAuthenticated === null) {
+      // 如果还在检查中，等待一下
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/sign-in");
+        return;
+      }
+    } else if (!isAuthenticated) {
+      // 如果未登录，重定向到登录页面
+      router.push("/sign-in");
+      return;
+    }
+
     if (newTodo.trim()) {
       setTodos([...todos, { id: Date.now(), text: newTodo.trim(), completed: false }]);
       setNewTodo("");
@@ -162,7 +201,7 @@ export default function Home() {
 
           {todos.length === 0 && (
             <div className="text-center text-white/70 mt-8">
-              还没有待办事项，添加一个开始吧！
+              {isAuthenticated ? "开始计划点什么吧" : "登录后制定Todo"}
             </div>
           )}
         </div>
