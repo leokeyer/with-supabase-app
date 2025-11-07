@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Circle, Plus, Trash2, Pencil, X, Image as ImageIcon, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export default function Home() {
   const [uploadingTodoId, setUploadingTodoId] = useState<number | null>(null);
   const [isAddingTodo, setIsAddingTodo] = useState(false);
   const router = useRouter();
+  const realtimeChannelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null);
 
   // 加载当前用户的 todos
   const loadTodos = async (userId?: string) => {
@@ -63,15 +64,86 @@ export default function Home() {
       
       setIsAuthenticated(!!session?.user);
       
+      // 取消之前的 Realtime 订阅
+      if (realtimeChannelRef.current) {
+        await supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+      
       // 只在 INITIAL_SESSION 事件时加载数据，避免在 SIGNED_IN 时客户端未初始化完成
       if (event === "INITIAL_SESSION" && session?.user) {
         setIsLoading(true);
         await loadTodos(session.user.id);
+        
+        // 设置 Realtime 订阅
+        setupRealtimeSubscription(session.user.id);
       } else if (!session?.user) {
         setTodos([]);
         setIsLoading(false);
       }
     });
+
+    // 设置 Realtime 订阅
+    const setupRealtimeSubscription = (userId: string) => {
+      if (!mounted) return;
+
+      // 创建 Realtime 频道
+      const channel = supabase
+        .channel(`todos:${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'todos',
+            filter: `user_id=eq.${userId}`,
+          },
+          (payload) => {
+            if (!mounted) return;
+
+            console.log('Realtime event:', payload.eventType, payload);
+
+            if (payload.eventType === 'INSERT') {
+              // 插入新记录
+              const newTodo = payload.new as Todo;
+              setTodos((prevTodos) => {
+                // 检查是否已存在（避免重复添加）
+                if (prevTodos.find((t) => t.id === newTodo.id)) {
+                  return prevTodos;
+                }
+                return [newTodo, ...prevTodos].sort((a, b) => {
+                  const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+                  const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+                  return bTime - aTime;
+                });
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              // 更新记录
+              const updatedTodo = payload.new as Todo;
+              setTodos((prevTodos) =>
+                prevTodos.map((todo) =>
+                  todo.id === updatedTodo.id ? updatedTodo : todo
+                )
+              );
+            } else if (payload.eventType === 'DELETE') {
+              // 删除记录
+              const deletedTodo = payload.old as Todo;
+              setTodos((prevTodos) =>
+                prevTodos.filter((todo) => todo.id !== deletedTodo.id)
+              );
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('Realtime subscription active');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Realtime subscription error');
+          }
+        });
+
+      realtimeChannelRef.current = channel;
+    };
 
     // 初始检查：使用 getSession 快速检查
     const checkInitialSession = async () => {
@@ -89,6 +161,8 @@ export default function Home() {
         if (session?.user) {
           setIsLoading(true);
           await loadTodos(session.user.id);
+          // 设置 Realtime 订阅
+          setupRealtimeSubscription(session.user.id);
         } else {
           setIsLoading(false);
         }
@@ -106,6 +180,11 @@ export default function Home() {
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      // 清理 Realtime 订阅
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
     };
   }, []);
 

@@ -27,12 +27,13 @@ supabase migration up
 
 | 字段名 | 类型 | 说明 |
 |--------|------|------|
-| id | UUID | 主键，自动生成 |
+| id | BIGINT | 主键，自动生成 |
 | user_id | UUID | 用户ID，关联 auth.users 表 |
 | text | TEXT | Todo 内容 |
 | completed | BOOLEAN | 是否完成，默认 false |
-| created_at | TIMESTAMP | 创建时间 |
-| updated_at | TIMESTAMP | 更新时间 |
+| image_url | TEXT | 图片附件URL（可选） |
+| created_at | TIMESTAMPTZ | 创建时间 |
+| updated_at | TIMESTAMPTZ | 更新时间 |
 
 ## RLS (Row Level Security) 策略
 
@@ -49,16 +50,28 @@ supabase migration up
 
 为了提高查询性能，创建了以下索引：
 
-- `todos_user_id_idx`: 按用户ID查询
-- `todos_completed_idx`: 按完成状态查询
-- `todos_created_at_idx`: 按创建时间排序（降序）
+- `idx_todos_user_id`: 按用户ID查询
 
 ## 触发器
 
-- **自动设置 user_id**: 在插入新记录时，自动将当前登录用户的ID设置为 `user_id`
 - **自动更新 updated_at**: 每次更新记录时自动更新时间戳
+
+## Realtime 功能
+
+已启用 Supabase Realtime 功能，支持多设备实时同步：
+
+- **INSERT**: 当用户添加新的 todo 时，所有设备会自动收到更新
+- **UPDATE**: 当用户修改或切换完成状态时，所有设备会自动同步
+- **DELETE**: 当用户删除 todo 时，所有设备会自动移除
+
+Realtime 订阅会自动遵循 RLS 策略，确保用户只能接收到自己数据的变化。
 
 ### 重要提示
 
-如果已经执行了 `001_create_todos_table.sql` 但添加功能不工作，请执行 `002_add_user_id_trigger.sql` 来添加自动设置 user_id 的触发器。
+1. 如果已经执行了 `001_create_todos_table.sql`，但需要启用 Realtime，请执行以下 SQL：
+   ```sql
+   ALTER PUBLICATION supabase_realtime ADD TABLE todos;
+   ```
+
+2. 确保在 Supabase Dashboard 中已启用 Realtime 功能（默认已启用）。
 
