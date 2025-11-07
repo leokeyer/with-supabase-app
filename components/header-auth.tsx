@@ -21,7 +21,7 @@ export default async function AuthButton() {
               variant={"default"}
               className="font-normal pointer-events-none"
             >
-              Please update .env.local file with anon key and url
+              请更新 .env.local 文件，添加 anon key 和 url
             </Badge>
           </div>
           <div className="flex gap-2">
@@ -32,7 +32,7 @@ export default async function AuthButton() {
               disabled
               className="opacity-75 cursor-none pointer-events-none"
             >
-              <Link href="/sign-in">Sign in</Link>
+              <Link href="/sign-in">登录</Link>
             </Button>
             <Button
               asChild
@@ -41,7 +41,7 @@ export default async function AuthButton() {
               disabled
               className="opacity-75 cursor-none pointer-events-none"
             >
-              <Link href="/sign-up">Sign up</Link>
+              <Link href="/sign-up">注册</Link>
             </Button>
           </div>
         </div>
@@ -50,20 +50,20 @@ export default async function AuthButton() {
   }
   return user ? (
     <div className="flex items-center gap-4">
-      Hey, {user.email}!
+      <span className="text-white">你好，{user.email}！</span>
       <form action={signOutAction}>
-        <Button type="submit" variant={"outline"}>
-          Sign out
+        <Button type="submit" variant={"outline"} className="border-white/30 text-white hover:bg-white/20">
+          退出登录
         </Button>
       </form>
     </div>
   ) : (
     <div className="flex gap-2">
-      <Button asChild size="sm" variant={"outline"}>
-        <Link href="/sign-in">Sign in</Link>
+      <Button asChild size="sm" variant={"outline"} className="border-white/30 text-white hover:bg-white/20">
+        <Link href="/sign-in">登录</Link>
       </Button>
-      <Button asChild size="sm" variant={"default"}>
-        <Link href="/sign-up">Sign up</Link>
+      <Button asChild size="sm" variant={"default"} className="bg-white/20 hover:bg-white/30 text-white border border-white/30">
+        <Link href="/sign-up">注册</Link>
       </Button>
     </div>
   );
